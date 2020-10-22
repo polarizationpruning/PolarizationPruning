@@ -24,6 +24,8 @@ pip install -r requirements.txt
 
 See README in `./imagenet` or `./cifar` for guidelines on running experiments on ImageNet ([ILSVRC-12](http://image-net.org/challenges/LSVRC/2012/)) or CIFAR10/100 datasets.
 
+We upload the the pruned checkpoints on [OneDrive](https://1drv.ms/u/s!AkN_Fy35WZXGmMRwSXPvC2hseXTtYQ?e=3Dygzl).
+
 ## Note
 
 ### Implementation of the FLOPs computing
