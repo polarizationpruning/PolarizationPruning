@@ -28,10 +28,6 @@ We upload the the pruned checkpoints on [OneDrive](https://1drv.ms/u/s!AkN_Fy35W
 
 ## Note
 
-### Implementation of the FLOPs computing
-
-We compute the FLOPs for all layers (Conv, Linear, BN, ReLU, ...), instead of only computing Conv layers.
-
 ### Pruning strategy
 
 We introduce a novel pruning method in our paper (Fig. 2). We have implemented multiple pruning methods in our code (option `--pruning-strategy`).
