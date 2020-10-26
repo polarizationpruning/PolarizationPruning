@@ -1,6 +1,6 @@
 # Neuron-level Structured Pruning using Polarization Regularizer
 
-NeurIPS 2020
+NeurIPS 2020   [**[Paper]**](https://github.com/polarizationpruning/PolarizationPruning/blob/master/NIPS2020_PolarizationPruning.pdf)
 
 ## Introduction
 
