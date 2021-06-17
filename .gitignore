@@ -134,5 +134,6 @@ dmypy.json
 # log files
 logs/
 
-# reports
-reports/
+#
+data*/
+bak/

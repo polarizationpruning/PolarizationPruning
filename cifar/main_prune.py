@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 
 import common
-from models.common import search_threshold
+from models.common import search_threshold, l1_norm_threshold
 from models.resnet_expand import resnet56 as resnet50_expand, ResNetExpand
 
 
@@ -42,7 +42,7 @@ def _get_parser():
 
     ## DON'T CHANGE
     parser.add_argument('--gate', action='store_true',
-                        help='Add gate after the BatchNrom layers. Only available for MobileNet v2!')
+                        help='Add gate after the BatchNrom layers.')
     parser.add_argument('--same', action='store_true',
                         help='The model before pruning and after pruning is required to be exactly the same')
     parser.add_argument('--no-cuda', action='store_true', default=False,
@@ -90,23 +90,15 @@ def prune_resnet(num_classes: int, sparse_model: nn.Module, pruning_strategy: st
     if prune_type == 'polarization':
         pruner = lambda weight: search_threshold(weight, pruning_strategy)
         prune_on = 'factor'
-
-        pruned_model.prune_model(pruner=pruner,
-                                 prune_mode=prune_mode,
-                                 prune_on=prune_on)
-    elif prune_type == 'random-unstructured':
-        raise NotImplementedError()
-    elif prune_type == 'l1-unstructured':
-        raise NotImplementedError()
-    elif prune_type == 'random-structured':
-        raise NotImplementedError()
-    elif prune_type == 'l1-structured':
-        raise NotImplementedError()
-    elif prune_type == 'global-unstructured':
-        raise NotImplementedError()
+    elif prune_type == 'l1-norm':
+        pruner = lambda weight: l1_norm_threshold(weight, ratio=l1_norm_ratio)
+        prune_on = 'weight'
     else:
-        raise ValueError(f"Unsupported prune type: {prune_type}")
+        raise ValueError(f'Unsupported prune type: {prune_type}')
 
+    pruned_model.prune_model(pruner=pruner,
+                             prune_mode=prune_mode,
+                             prune_on=prune_on)
     print("Pruning finished. cfg:")
     print(pruned_model.config())
 

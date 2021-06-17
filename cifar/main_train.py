@@ -11,7 +11,6 @@ import shutil
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.optim as optim
 from tensorboardX import SummaryWriter
 from torchvision import datasets, transforms
 
@@ -37,7 +36,7 @@ parser.add_argument('--lbd', type=float, default=0.0002,
                     help='scale sparse rate (i.e. lambda in eq.2) (default: 0.0002)')
 parser.add_argument('--t', type=float, default=1.2,
                     help='coefficient of L1 term in polarization regularizer (default: 1.2)')
-parser.add_argument('--delta', type=float, default=0.05,
+parser.add_argument('--delta', type=float, default=0.02,
                     help='allowable offset when searching for suitable lbd and t to achieve stable target-flops')
 
 ## DON'T CHANGE (specs are according to the paper)
@@ -105,8 +104,6 @@ parser.add_argument('--width-multiplier', default=1.0, type=float,
                          "Unavailable for other networks. (default 1.0)")
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
-parser.add_argument('--which-cuda', type=int, default=0,
-                    help='choose which gpu to use')
 parser.add_argument('--seed', type=int, metavar='S', default=None,
                     help='random seed (default: a random int)')
 parser.add_argument('--log-interval', type=int, default=100, metavar='N',
@@ -165,12 +162,6 @@ print(f"Current git hash: {common.get_git_id()}")
 
 
 
-#------- CUDA ---------
-if args.cuda and args.which_cuda:
-    if args.which_cuda >= 0 and args.which_cuda < torch.cuda.device_count():
-        default_cuda = torch.device(f'cuda:{args.which_cuda}')
-    else:
-        raise ValueError()
 
 
 #------- Reproducibility -------
@@ -244,7 +235,7 @@ training_flops = compute_conv_flops(model, cuda=True)
 print(f"Training model. FLOPs: {training_flops:,}")
 
 if args.cuda:
-    model.cuda(default_cuda)
+    model.cuda()
 
 #------ Build Optim ------
 if args.bn_wd:
@@ -268,10 +259,10 @@ for param_name, model_p in model.named_parameters():
         wd_params.append(model_p)
         print(f"Weight decay param: parameter name {param_name}")
 
-optimizer = optim.SGD([{'params': list(no_wd_params), 'weight_decay': 0.},
-                       {'params': list(wd_params), 'weight_decay': args.weight_decay}],
-                      args.lr,
-                      momentum=args.momentum)
+optimizer = torch.optim.SGD([{'params': list(no_wd_params), 'weight_decay': 0.},
+                             {'params': list(wd_params), 'weight_decay': args.weight_decay}],
+                            args.lr,
+                            momentum=args.momentum)
 
 
 
@@ -327,6 +318,19 @@ def bn_sparsity(model: nn.Module,
     else:
         raise ValueError()
 
+# additional subgradient descent on the sparsity-induced penalty term
+def updateBN():
+    if args.loss == LossType.L1_SPARSITY_REGULARIZATION:
+        sparsity = args.lbd
+        bn_modules = list(filter(lambda m: (isinstance(m[1], nn.BatchNorm2d) or isinstance(m[1], nn.BatchNorm1d)),
+                                 model.named_modules()))
+        bn_modules = list(map(lambda m: m[1], bn_modules))  # remove module name
+        for m in bn_modules:
+            if isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.BatchNorm1d):
+                m.weight.grad.data.add_(sparsity * torch.sign(m.weight.data))
+    else:
+        raise NotImplementedError(f"Do not support loss: {args.loss}")
+
 
 def clamp_bn(model, lower_bound=0, upper_bound=1):
     if model.gate:
@@ -350,7 +354,7 @@ def train(epoch, curr_lbd, curr_t):
 
     for batch_idx, (data, target) in enumerate(train_loader):
         if args.cuda:
-            data, target = data.cuda(default_cuda), target.cuda(default_cuda)
+            data, target = data.cuda(), target.cuda()
         optimizer.zero_grad()
         output = model(data)
         if isinstance(output, tuple):
@@ -369,6 +373,8 @@ def train(epoch, curr_lbd, curr_t):
             loss += sparsity_loss
             avg_sparsity_loss += sparsity_loss.data.item()
         loss.backward()
+        if args.loss in {LossType.L1_SPARSITY_REGULARIZATION}:
+            updateBN()
         optimizer.step()
         if args.loss in {LossType.POLARIZATION}:
             clamp_bn(model, upper_bound=args.clamp)
@@ -390,7 +396,7 @@ def test():
     with torch.no_grad():
         for data, target in test_loader:
             if args.cuda:
-                data, target = data.cuda(default_cuda), target.cuda(default_cuda)
+                data, target = data.cuda(), target.cuda()
             output = model(data)
             if isinstance(output, tuple):
                 output, output_aux = output

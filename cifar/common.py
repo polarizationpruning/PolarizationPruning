@@ -5,6 +5,7 @@ import torch
 
 class LossType(Enum):
     ORIGINAL = 0
+    L1_SPARSITY_REGULARIZATION = 1
     POLARIZATION = 4
 
     @staticmethod
@@ -15,6 +16,7 @@ class LossType(Enum):
     @staticmethod
     def loss_name():
         return {"original": LossType.ORIGINAL,
+                'l1-sr': LossType.L1_SPARSITY_REGULARIZATION,
                 "polar": LossType.POLARIZATION,
                 }
 
