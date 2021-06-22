@@ -36,8 +36,6 @@ parser.add_argument('--lbd', type=float, default=0.0002,
                     help='scale sparse rate (i.e. lambda in eq.2) (default: 0.0002)')
 parser.add_argument('--t', type=float, default=1.2,
                     help='coefficient of L1 term in polarization regularizer (default: 1.2)')
-parser.add_argument('--delta', type=float, default=0.02,
-                    help='allowable offset when searching for suitable lbd and t to achieve stable target-flops')
 
 ## DON'T CHANGE (specs are according to the paper)
 parser.add_argument('--batch-size', type=int, default=64, metavar='N',
@@ -343,7 +341,7 @@ def clamp_bn(model, lower_bound=0, upper_bound=1):
         m.weight.data.clamp_(lower_bound, upper_bound)
 
 
-def train(epoch, curr_lbd, curr_t):
+def train(epoch):
     """Model training procedure (for 1 epoch)"""
     model.train()
     global history_score, global_step
@@ -369,7 +367,7 @@ def train(epoch, curr_lbd, curr_t):
 
         if args.loss in {LossType.POLARIZATION}:
             sparsity_loss = bn_sparsity(
-                model, args.loss, curr_lbd, curr_t, args.alpha)
+                model, args.loss, args.lbd, args.t, args.alpha)
             loss += sparsity_loss
             avg_sparsity_loss += sparsity_loss.data.item()
         loss.backward()
@@ -472,11 +470,6 @@ global_step = 0
 writer = SummaryWriter(logdir=args.log)
 
 # binary search
-lbd_l, lbd_u = 0., args.lbd
-curr_lbd = (lbd_l + lbd_u) / 2
-curr_t = args.t
-fix_lbd, fix_t = False, False
-epoch_flops = []
 
 for epoch in range(args.start_epoch, args.epochs):
     if args.max_epoch is not None and epoch >= args.max_epoch:
@@ -485,7 +478,7 @@ for epoch in range(args.start_epoch, args.epochs):
     current_learning_rate = adjust_learning_rate(optimizer, epoch, args.gammas, args.decay_epoch)
     print("Start epoch {}/{} with learning rate {}...".format(epoch, args.epochs, current_learning_rate))
 
-    train(epoch, curr_lbd, curr_t)
+    train(epoch)
 
     prec1 = test()
     history_score[epoch][2] = prec1
@@ -523,37 +516,18 @@ for epoch in range(args.start_epoch, args.epochs):
         writer.add_scalar("train/flops", flops_grad, epoch)
         writer.add_scalar("train/flops_grad_ratio", flops_grad_ratio, epoch)
 
-        epoch_flops.append(flops_grad_ratio)
-        flops_diff = flops_grad_ratio - args.target_flops
-
-        if not fix_lbd and len(epoch_flops) >= 5 and np.std(epoch_flops[:-5]) <= 0.03: # F stable
-            if flops_diff >= 2 * args.delta:
-                lbd_u = curr_lbd
-            elif flops_diff <= -2 * args.delta:
-                lbd_l = curr_lbd
-            else:
-                fix_lbd = True
-
-        if fix_lbd and not fix_t and len(epoch_flops) >= 5 and np.std(epoch_flops[:-5]) <= 0.03: # F stable
-            if flops_diff >= args.delta:
-                pass
-            elif flops_diff <= -args.delta:
-                pass
-            else:
-                fix_t = True
-
-        if fix_lbd and fix_t and args.gate:
-            print("The grad pruning FLOPs achieve the target FLOPs.")
+        if args.loss == LossType.POLARIZATION and args.target_flops and flops_grad_ratio - args.target_flops <= 0.02 and args.gate:
+            print("The grad pruning FLOPs archieve the target FLOPs.")
             print(f"Current pruning ratio: {flops_grad_ratio}")
             print("Stop polarization from current epoch and continue training.")
 
-            # take out polarization loss
+            # do not apply polarization loss
             args.lbd = 0
             freeze_sparse_gate(model)
             if args.backup_freq > 20:
                 args.backup_freq = 20
 
-if args.loss == LossType.POLARIZATION and args.target_flops and abs(flops_diff) > args.delta and args.gate:
+if args.loss == LossType.POLARIZATION and args.target_flops and args.gate:
     print("WARNING: the FLOPs does not achieve the target FLOPs at the end of training.")
 print("Best accuracy: " + str(best_prec1))
 history_score[-1][0] = best_prec1
