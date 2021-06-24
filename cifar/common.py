@@ -2,6 +2,18 @@ import subprocess
 from enum import Enum
 
 import torch
+import timeit
+
+class SnippetTimer:
+    def __init__(self, name=None):
+        self.name = "'" + name + "'" if name else ''
+
+    def __enter__(self):
+        self.start = timeit.default_timer()
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.took = (timeit.default_timer() - self.start) * 1000.0
+        print("[Code block {}]: {} ms".format(self.name, self.took))
 
 class LossType(Enum):
     ORIGINAL = 0

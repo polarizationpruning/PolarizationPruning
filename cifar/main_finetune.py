@@ -328,6 +328,8 @@ for epoch in range(args.start_epoch, args.epochs):
         'state_dict': model.state_dict(),
         'best_prec1': best_prec1,
         'optimizer': optimizer.state_dict(),
+        'cfg': checkpoint['cfg'],
+        'expand_idx': checkpoint['expand_idx']
     }, is_best, filepath=args.save)
 
     # write the tensorboard
