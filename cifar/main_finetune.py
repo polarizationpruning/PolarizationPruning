@@ -320,7 +320,7 @@ for epoch in range(args.start_epoch, args.epochs):
     train(epoch)
     prec1 = test()
     history_score[epoch][2] = prec1
-    np.savetxt(os.path.join(args.save, 'record.txt'), history_score, fmt='%10.5f', delimiter=',')
+    np.savetxt(os.path.join(args.save, 'tuned_record.txt'), history_score, fmt='%10.5f', delimiter=',')
     is_best = prec1 > best_prec1
     best_prec1 = max(prec1, best_prec1)
     save_checkpoint({
