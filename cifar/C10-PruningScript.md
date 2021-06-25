@@ -2,7 +2,7 @@
 
 > To train on CIFAR-100, use `--dataset cifar100`.
 
-## CIFAR10/100
+## CIFAR10
 
 ### Naive L1 Structured (w/o L1 sparsity regularizer in training)
 1. Sparsity Train (check 0.9408)
