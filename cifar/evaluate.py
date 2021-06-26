@@ -37,8 +37,12 @@ parser.add_argument('--arch', default='resnet56', type=str,
                     help='architecture to use')
 parser.add_argument('--dataset', type=str, default='cifar10', choices=['cifar10', 'cifar100'],
                     help='training dataset (default: cifar10)')
+parser.add_argument('--test-accuracy', action='store_true',
+                    default=False,
+                    help='test accuracy')
 parser.add_argument('--repeat', type=int, default=5,
                     help='test repeat time')
+
 # CONFIG
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
@@ -117,10 +121,28 @@ def test(mdl):
         100. * float(correct) / len(test_loader.dataset)))
     return float(correct) / float(len(test_loader.dataset))
 
+def infer_one_instance(mdl):
+    mdl.eval()
+    with torch.no_grad():
+        data, target = next(iter(test_loader))
+        if args.cuda:
+            data, target = data.cuda(), target.cuda()
+            output = mdl(data)
+            if isinstance(output, tuple):
+                output, output_aux = output
+            pred = output.data.max(1, keepdim=True)[1]
+            if pred.eq(target.data.view_as(pred)).cpu():
+                print('Correct!')
+            else:
+                print('Wrong!')
+
 #------ Load & Test ------
 if args.original and os.path.isfile(args.original):
     ## Original
-    ori_ckpt: Dict[str, Any] = torch.load(args.original)
+    if args.cuda:
+        ori_ckpt: Dict[str, Any] = torch.load(args.original)
+    else:
+        ori_ckpt: Dict[str, Any] = torch.load(args.original, map_location='cpu')
     print(f"=> Loading the original model...\n=> Epoch: {ori_ckpt['epoch']}, Acc.: {ori_ckpt['best_prec1']}")
 
     ori_model: ResNetExpand = resnet50_expand(num_classes=num_classes,
@@ -129,13 +151,20 @@ if args.original and os.path.isfile(args.original):
                                             use_input_mask=args.input_mask)
     ori_model.load_state_dict(ori_ckpt['state_dict'])
 
-    with SnippetTimer("Original Model", args.repeat):
-        for _ in range(args.repeat):
-            test(ori_model)
+    if args.test_accuracy:
+        with SnippetTimer("Original Model", args.repeat):
+            for _ in range(args.repeat):
+                test(ori_model)
+
+    with SnippetTimer("Infer Single Instance"):
+        infer_one_instance(ori_model)
 
 if args.fine_tuned and os.path.isfile(args.fine_tuned):
     ## Fine-tuned
-    tuned_ckpt: Dict[str, Any] = torch.load(args.fine_tuned)
+    if torch.cuda:
+        tuned_ckpt: Dict[str, Any] = torch.load(args.fine_tuned)
+    else:
+        tuned_ckpt: Dict[str, Any] = torch.load(args.fine_tuned, map_location='cpu')
     print(f"=> Loading the fine-tuned model...\n=> Epoch: {tuned_ckpt['epoch']}, Acc.: {tuned_ckpt['best_prec1']}")
 
     tuned_model: ResNetExpand = resnet50_expand(num_classes=num_classes,
@@ -148,6 +177,10 @@ if args.fine_tuned and os.path.isfile(args.fine_tuned):
 
     calculate_flops(tuned_model)
 
-    with SnippetTimer("Fine-tuned Model", args.repeat):
-        for _ in range(args.repeat):
-            test(tuned_model)
+    if args.test_accuracy:
+        with SnippetTimer("Fine-tuned Model", args.repeat):
+            for _ in range(args.repeat):
+                test(tuned_model)
+
+    with SnippetTimer("Infer Single Instance"):
+        infer_one_instance(tuned_model)
