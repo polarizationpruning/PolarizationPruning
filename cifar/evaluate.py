@@ -161,7 +161,7 @@ if args.original and os.path.isfile(args.original):
 
 if args.fine_tuned and os.path.isfile(args.fine_tuned):
     ## Fine-tuned
-    if torch.cuda:
+    if args.cuda:
         tuned_ckpt: Dict[str, Any] = torch.load(args.fine_tuned)
     else:
         tuned_ckpt: Dict[str, Any] = torch.load(args.fine_tuned, map_location='cpu')
